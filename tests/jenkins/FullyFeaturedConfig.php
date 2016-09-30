@@ -33,6 +33,7 @@ $wgCirrusSearchWikimediaExtraPlugin[ 'super_detect_noop' ] = true;
 $wgCirrusSearchWikimediaExtraPlugin[ 'id_hash_mod_filter' ] = true;
 $wgCirrusSearchWikimediaExtraPlugin[ 'documentVersion' ] = true;
 $wgCirrusSearchUseIcuFolding = 'yes';
+$wgCirrusSearchUseIcuTokenizer = 'yes';
 // Test ICU folding filter
 // see full_text_api.feature: Searching without accents finds results with accents
 $wgCirrusSearchICUFoldingUnicodeSetFilter = '[^йЙ]';
