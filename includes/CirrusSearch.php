@@ -156,7 +156,8 @@ class CirrusSearch extends SearchEngine {
 	public function searchText( $term ) {
 		$config = $this->config;
 		if ( $this->request && $this->request->getVal( 'cirrusLang' ) ) {
-			$config = new SearchConfig( $this->request->getVal( 'cirrusLang' ) );
+			// FIXME: do we still use this param?
+			$config = $this->config->newInterwikiConfig( $this->request->getVal( 'cirrusLang' ) );
 		}
 		$matches = $this->searchTextReal( $term, $config );
 		if (!$matches instanceof ResultSet) {
@@ -175,12 +176,10 @@ class CirrusSearch extends SearchEngine {
 	/**
 	 * Check whether we want to try another language.
 	 * @param string $term Search term
-	 * @return string[]|null Array of (interwiki, dbname) for another wiki to try, or null
+	 * @return string|null dbname for another wiki to try, or null
 	 */
 	private function hasSecondaryLanguage( $term ) {
-		if ( empty( $GLOBALS['wgCirrusSearchLanguageToWikiMap'] ) ||
-				empty( $GLOBALS['wgCirrusSearchWikiToNameMap'] ) ) {
-			// map's empty - no need to bother with detection
+		if ( !$this->config->isCrossLanguageSearchEnabled() ) {
 			return null;
 		}
 
@@ -209,47 +208,28 @@ class CirrusSearch extends SearchEngine {
 				continue;
 			}
 			$lang = $detector->detect( $this, $term );
-			$wiki = self::wikiForLanguage( $lang );
-			if ( $wiki !== null ) {
+			$wiki = \CirrusSearch\InterwikiResolverFactory::getInstance()
+				->getResolver( $this->config )
+				->getSameProjectWikiByLang( $lang );
+			if ( !empty( $wiki ) ) {
 				// it might be more accurate to attach these to the 'next'
 				// log context? It would be inconsistent with the
 				// langdetect => false condition which does not have a next
 				// request though.
 				Searcher::appendLastLogPayload( 'langdetect', $name );
-				$detected = $wiki;
+				$detected = [ reset( $wiki ), key( $wiki ) ];
 				break;
 			}
 		}
 		if ( $detected === null ) {
 			Searcher::appendLastLogPayload( 'langdetect', 'failed' );
+			return null;
 		} else {
 			// Report language detection with search metrics
+			// TODO: do we still need this metric?
 			$this->extraSearchMetrics['wgCirrusSearchAltLanguage'] = $detected;
+			return $detected[1];
 		}
-
-		return $detected;
-	}
-
-	/**
-	 * @param string $lang Language code to find wiki for
-	 * @return string[]|null Array of (interwiki, dbname) for wiki related to specified language code
-	 */
-	private static function wikiForLanguage( $lang ) {
-		if ( empty( $GLOBALS['wgCirrusSearchLanguageToWikiMap'][$lang] ) ) {
-			return null;
-		}
-		$interwiki = $GLOBALS['wgCirrusSearchLanguageToWikiMap'][$lang];
-
-		if ( empty( $GLOBALS['wgCirrusSearchWikiToNameMap'][$interwiki] ) ) {
-			return null;
-		}
-		$interWikiId = $GLOBALS['wgCirrusSearchWikiToNameMap'][$interwiki];
-		if ( $interWikiId == wfWikiID() ) {
-			// we're back to the same wiki, no use to try again
-			return null;
-		}
-
-		return [ $interwiki, $interWikiId ];
 	}
 
 	/**
@@ -285,16 +265,15 @@ class CirrusSearch extends SearchEngine {
 				}
 			}
 		}
-		$altWiki = $this->hasSecondaryLanguage( $term );
-		if ( $altWiki ) {
+		$altWikiId = $this->hasSecondaryLanguage( $term );
+		if ( $altWikiId ) {
 			try {
-				$config = new SearchConfig( $altWiki[0], $altWiki[1] );
+				$config = $this->config->newInterwikiConfig( $altWikiId );
 			} catch ( MWException $e ) {
 				LoggerFactory::getInstance( 'CirrusSearch' )->info(
-					"Failed to get config for {interwiki}:{dbwiki}",
+					"Failed to get config for {dbwiki}",
 					[
-						"interwiki" => $altWiki[0],
-						"dbwiki" => $altWiki[1],
+						"dbwiki" => $altWikiId,
 						"exception" => $e
 					]
 				);
@@ -311,7 +290,7 @@ class CirrusSearch extends SearchEngine {
 					// users in the control buckets, and provide them the same latency as users
 					// in the test bucket.
 					if ( $GLOBALS['wgCirrusSearchEnableAltLanguage'] && $numRows > 0) {
-						$oldResult->addInterwikiResults( $matches, SearchResultSet::INLINE_RESULTS, $altWiki[1] );
+						$oldResult->addInterwikiResults( $matches, SearchResultSet::INLINE_RESULTS, $altWikiId );
 					}
 				}
 			}
@@ -390,7 +369,7 @@ class CirrusSearch extends SearchEngine {
 			$highlightingConfig ^= FullTextResultsType::HIGHLIGHT_FILE_TEXT;
 		}
 
-		$resultsType = new FullTextResultsType( $highlightingConfig, $config ? $config->getWikiCode() : '');
+		$resultsType = new FullTextResultsType( $config, $highlightingConfig );
 		$searcher->setResultsType( $resultsType );
 		$status = $searcher->searchText( $term, $this->showSuggestion );
 
@@ -647,10 +626,10 @@ class CirrusSearch extends SearchEngine {
 		$searcher = new Searcher( $this->connection, $this->offset, $this->limit, $this->config, $this->namespaces );
 
 		if ( $search ) {
-			$searcher->setResultsType( new FancyTitleResultsType( 'prefix' ) );
+			$searcher->setResultsType( new FancyTitleResultsType( $this->config, 'prefix' ) );
 		} else {
 			// Empty searches always find the title.
-			$searcher->setResultsType( new TitleResultsType() );
+			$searcher->setResultsType( new TitleResultsType( $this->config ) );
 		}
 
 		try {
