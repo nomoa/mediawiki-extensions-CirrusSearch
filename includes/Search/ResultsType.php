@@ -3,7 +3,6 @@
 namespace CirrusSearch\Search;
 
 use CirrusSearch\Searcher;
-use CirrusSearch\SearchConfig;
 use MediaWiki\Logger\LoggerFactory;
 use Title;
 
@@ -66,24 +65,6 @@ interface ResultsType {
 abstract class BaseResultsType implements ResultsType {
 	use TitleHelper;
 
-	/** @var SearchConfig */
-	private $config;
-
-	/**
-	 * @param SearchConfig $config
-	 */
-	public function __construct( SearchConfig $config ) {
-		$this->config = $config;
-	}
-
-	/**
-	 * TODO: remove when getWikiCode is removed
-	 * @return SearchConfig
-	 */
-	public function getConfig() {
-		return $this->config;
-	}
-
 	/**
 	 * @return false|string|array corresponding to Elasticsearch source filtering syntax
 	 */
@@ -142,11 +123,9 @@ class FancyTitleResultsType extends TitleResultsType {
 	 * Build result type.   The matchedAnalyzer is required to detect if the match
 	 * was from the title or a redirect (and is kind of a leaky abstraction.)
 	 *
-	 * @param SearchConfig $config
 	 * @param string $matchedAnalyzer the analyzer used to match the title
 	 */
-	public function __construct( SearchConfig $config, $matchedAnalyzer ) {
-		parent::__construct( $config );
+	public function __construct( $matchedAnalyzer ) {
 		$this->matchedAnalyzer = $matchedAnalyzer;
 	}
 
@@ -293,11 +272,9 @@ class FullTextResultsType extends BaseResultsType {
 	private $highlightingConfig;
 
 	/**
-	 * @param SearchConfig $config
 	 * @param int $highlightingConfig Bitmask, see HIGHLIGHT_* consts
 	 */
-	public function __construct( SearchConfig $config, $highlightingConfig ) {
-		parent::__construct( $config );
+	public function __construct( $highlightingConfig ) {
 		$this->highlightingConfig = $highlightingConfig;
 	}
 
@@ -476,8 +453,7 @@ class FullTextResultsType extends BaseResultsType {
 			$context->getSuggestPrefixes(),
 			$context->getSuggestSuffixes(),
 			$result,
-			$context->isSyntaxUsed(),
-			$this->getConfig()
+			$context->isSyntaxUsed()
 		);
 	}
 
@@ -612,8 +588,7 @@ class InterwikiResultsType extends BaseResultsType {
 			$context->getSuggestPrefixes(),
 			$context->getSuggestSuffixes(),
 			$result,
-			$context->isSyntaxUsed(),
-			$this->getConfig()
+			$context->isSyntaxUsed()
 		);
 	}
 

@@ -157,7 +157,7 @@ class CirrusSearch extends SearchEngine {
 		$config = $this->config;
 		if ( $this->request && $this->request->getVal( 'cirrusLang' ) ) {
 			// FIXME: do we still use this param?
-			$config = $this->config->newInterwikiConfig( $this->request->getVal( 'cirrusLang' ) );
+			$config = new SearchConfig( $this->request->getVal( 'cirrusLang' ) );
 		}
 		$matches = $this->searchTextReal( $term, $config );
 		if (!$matches instanceof ResultSet) {
@@ -268,7 +268,7 @@ class CirrusSearch extends SearchEngine {
 		$altWikiId = $this->hasSecondaryLanguage( $term );
 		if ( $altWikiId ) {
 			try {
-				$config = $this->config->newInterwikiConfig( $altWikiId );
+				$config = new SearchConfig( $altWikiId );
 			} catch ( MWException $e ) {
 				LoggerFactory::getInstance( 'CirrusSearch' )->info(
 					"Failed to get config for {dbwiki}",
@@ -369,7 +369,7 @@ class CirrusSearch extends SearchEngine {
 			$highlightingConfig ^= FullTextResultsType::HIGHLIGHT_FILE_TEXT;
 		}
 
-		$resultsType = new FullTextResultsType( $config, $highlightingConfig );
+		$resultsType = new FullTextResultsType( $highlightingConfig );
 		$searcher->setResultsType( $resultsType );
 		$status = $searcher->searchText( $term, $this->showSuggestion );
 
@@ -626,10 +626,10 @@ class CirrusSearch extends SearchEngine {
 		$searcher = new Searcher( $this->connection, $this->offset, $this->limit, $this->config, $this->namespaces );
 
 		if ( $search ) {
-			$searcher->setResultsType( new FancyTitleResultsType( $this->config, 'prefix' ) );
+			$searcher->setResultsType( new FancyTitleResultsType( 'prefix' ) );
 		} else {
 			// Empty searches always find the title.
-			$searcher->setResultsType( new TitleResultsType( $this->config ) );
+			$searcher->setResultsType( new TitleResultsType() );
 		}
 
 		try {

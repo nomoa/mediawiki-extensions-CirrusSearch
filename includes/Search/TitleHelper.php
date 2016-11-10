@@ -77,8 +77,8 @@ trait TitleHelper {
 		if ( isset ( $r->wiki ) && $r->wiki !== wfWikiID() ) {
 			return true;
 		}
-		// TODO: replace by return false when wiki is populated
-		return !empty( $this->getConfig()->getWikiCode() );
+		// no wiki is suspicious, should we log a warning?
+		return false;
 	}
 
 	/**
@@ -91,8 +91,8 @@ trait TitleHelper {
 				->getService( InterwikiResolver::SERVICE )
 				->getInterwikiPrefix( $r->wiki );
 		}
-		// TODO: replace by return false when wiki is populated
-		return $this->getConfig()->getWikiCode();
+		// no wiki is suspicious, should we log somthing?
+		return null;
 	}
 
 	/**
@@ -117,10 +117,4 @@ trait TitleHelper {
 			$lb->execute();
 		}
 	}
-
-	/**
-	 * TODO: remove when getWikiCode is removed
-	 * @return SearchConfig
-	 */
-	public abstract function getConfig();
 }

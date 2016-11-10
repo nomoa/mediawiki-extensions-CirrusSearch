@@ -3,7 +3,6 @@
 namespace CirrusSearch\Search;
 
 use CirrusSearch\Searcher;
-use CirrusSearch\SearchConfig;
 use SearchResultSet;
 
 /**
@@ -58,11 +57,6 @@ class ResultSet extends SearchResultSet {
 	private $searchContainedSyntax;
 
 	/**
-	 * @var SearchConfig
-	 */
-	private $config;
-
-	/**
 	 * @var array
 	 */
 	private $interwikiResults = [];
@@ -82,14 +76,12 @@ class ResultSet extends SearchResultSet {
 	 * @param string[] $suggestSuffixes
 	 * @param \Elastica\ResultSet $res
 	 * @param bool $searchContainedSyntax
-	 * @param SearchConfig $config
 	 */
-	public function __construct( array $suggestPrefixes, array $suggestSuffixes, \Elastica\ResultSet $res, $searchContainedSyntax, SearchConfig $config ) {
+	public function __construct( array $suggestPrefixes, array $suggestSuffixes, \Elastica\ResultSet $res, $searchContainedSyntax ) {
 		$this->result = $res;
 		$this->searchContainedSyntax = $searchContainedSyntax;
 		$this->hits = $res->count();
 		$this->totalHits = $res->getTotalHits();
-		$this->config = $config;
 		$this->preCacheContainedTitles( $this->result );
 		$suggestion = $this->findSuggestion();
 		if ( $suggestion && ! $this->resultContainsFullyHighlightedMatch() ) {
@@ -226,7 +218,7 @@ class ResultSet extends SearchResultSet {
 		$current = $this->result->current();
 		if ( $current ) {
 			$this->result->next();
-			$result = new Result( $this->result, $current, $this->config );
+			$result = new Result( $this->result, $current );
 			$this->augmentResult( $result );
 			return $result;
 		}
@@ -297,12 +289,5 @@ class ResultSet extends SearchResultSet {
 	 */
 	public function getQueryAfterRewriteSnippet() {
 		return $this->rewrittenQuerySnippet;
-	}
-
-	/**
-	 * @return SearchConfig
-	 */
-	public function getConfig() {
-		return $this->config;
 	}
 }

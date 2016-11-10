@@ -128,18 +128,13 @@ class InterwikiSearcher extends Searcher {
 
 		$retval = [];
 		$searches = [];
-		$resultsTypes = [];
+		// Note that this is a hack, $this->resultsType is not properly
+		// specialized to the interwiki use case, but because we are not
+		// returning load test results to the users that is acceptable.
+		if (!$this->isLoadTestEnabled ) {
+			$this->setResultsType( new InterwikiResultsType() );
+		}
 		foreach ( $sources as $interwiki => $index ) {
-			// Note that this is a hack, $this->resultsType is not properly
-			// specialized to the interwiki use case, but because we are not
-			// returning load test results to the users that is acceptable.
-			if (!$this->isLoadTestEnabled ) {
-				// TODO: remove when getWikiCode is removed.
-				// In theory we should be able to reuse the same
-				// Results type for all searches
-				$resultsTypes[$interwiki] = new InterwikiResultsType( $this->config->newInterwikiConfig( $index, false ) );
-				$this->setResultsType( $resultsTypes[$interwiki] );
-			}
 			$this->indexBaseName = $index;
 			$this->searchContext = clone $context;
 			$search = $this->buildSearch();
@@ -150,7 +145,7 @@ class InterwikiSearcher extends Searcher {
 			}
 		}
 
-		$results = $this->searchMulti( $searches, $resultsTypes );
+		$results = $this->searchMulti( $searches );
 		if ( !$results->isOK() ) {
 			return null;
 		}

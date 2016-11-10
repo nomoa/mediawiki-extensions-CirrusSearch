@@ -5,7 +5,6 @@ namespace CirrusSearch\Search;
 use CirrusSearch\InterwikiSearcher;
 use CirrusSearch\Util;
 use CirrusSearch\Searcher;
-use CirrusSearch\SearchConfig;
 use MediaWiki\Logger\LoggerFactory;
 use MWTimestamp;
 use SearchResult;
@@ -50,8 +49,6 @@ class Result extends SearchResult {
 	private $textSnippet;
 	/** @var bool */
 	private $isFileMatch = false;
-	/* @var SearchConfig */
-	private $config;
 	/* @var string result wiki */
 	private $wiki;
 	/** @var string */
@@ -76,12 +73,10 @@ class Result extends SearchResult {
 	 *
 	 * @param \Elastica\ResultSet $results containing all search results
 	 * @param \Elastica\Result $result containing the given search result
-	 * @param SearchConfig $config
 	 */
-	public function __construct( $results, $result, SearchConfig $config ) {
+	public function __construct( $results, $result ) {
 		global $wgCirrusSearchDevelOptions;
 		$this->ignoreMissingRev = isset( $wgCirrusSearchDevelOptions['ignore_missing_rev'] );
-		$this->config = $config;
 		$this->namespace_text = $result->namespace_text;
 		$this->wiki = $result->wiki;
 		$this->docId = $result->getId();
@@ -364,12 +359,5 @@ class Result extends SearchResult {
 	 */
 	public function getExplanation() {
 		return $this->explanation;
-	}
-
-	/**
-	 * @return SearchConfig $config
-	 */
-	public function getConfig() {
-		return $this->config;
 	}
 }
