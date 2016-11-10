@@ -827,4 +827,20 @@ class Hooks {
 		$defaultOptions['cirrussearch-pref-completion-profile'] = $config->get( 'CirrusSearchCompletionSettings' );
 		return true;
 	}
+
+	public static function onMediaWikiServices( MediaWikiServices $container ) {
+		$container->defineService(
+			InterwikiResolverFactory::SERVICE,
+			[InterwikiResolverFactory::class, 'newFactory']
+		);
+		$container->defineService(
+			InterwikiResolver::SERVICE,
+			function() {
+				return MediaWikiServices::getInstance()
+					->getService( InterwikiResolverFactory::SERVICE )
+					->getResolver( self::getConfig() );
+			}
+		);
+		return true;
+	}
 }
