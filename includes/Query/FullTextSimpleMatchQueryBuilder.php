@@ -5,6 +5,12 @@ namespace CirrusSearch\Query;
 use CirrusSearch\Search\Escaper;
 use CirrusSearch\Search\SearchContext;
 use CirrusSearch\SearchConfig;
+use Elastica\Query\AbstractQuery;
+use Elastica\Query\BoolQuery;
+use Elastica\Query\MultiMatch;
+use Elastica\Query\Match;
+use Elastica\Query\DisMax;
+use Elastica\Query\QueryString;
 
 /**
  * Simple Match query builder, currently based on
@@ -50,6 +56,11 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	 */
 	private $dismaxSettings;
 
+	/**
+	 * @var FeatureCollector|null $collector
+	 */
+	private $collector;
+
 	public function __construct( SearchConfig $config, Escaper $escaper, array $feature, array $settings ) {
 		parent::__construct( $config, $escaper, $feature );
 		$this->fields = $settings['fields'];
@@ -58,6 +69,7 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 		$this->defaultQueryType = $settings['default_query_type'];
 		$this->defaultMinShouldMatch = $settings['default_min_should_match'];
 		$this->dismaxSettings = isset( $settings['dismax_settings'] ) ? $settings['dismax_settings'] : [];
+		$this->collector = $collector;
 	}
 
 	/**
@@ -70,7 +82,7 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	 * @param string[] $nearMatchFields
 	 * @param string $queryString
 	 * @param string $nearMatchQuery
-	 * @return \Elastica\Query\AbstractQuery
+	 * @return AbstractQuery
 	 */
 	protected function buildSearchTextQuery( SearchContext $context, array $fields, array $nearMatchFields, $queryString, $nearMatchQuery ) {
 		if ( $context->isSyntaxUsed( 'query_string' ) || $this->requireAutoGeneratePhrase( $queryString ) ) {
@@ -85,10 +97,10 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 
 		// Build one query for the full text fields and one for the near match fields so that
 		// the near match can run unescaped.
-		$bool = new \Elastica\Query\BoolQuery();
+		$bool = new BoolQuery();
 		$bool->setMinimumNumberShouldMatch( 1 );
 		$bool->addShould( $queryForMostFields );
-		$nearMatch = new \Elastica\Query\MultiMatch();
+		$nearMatch = new MultiMatch();
 		$nearMatch->setFields( $nearMatchFields );
 		$nearMatch->setQuery( $nearMatchQuery );
 		$bool->addShould( $nearMatch );
@@ -123,11 +135,11 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	 * @param string[] $fields
 	 * @param string $queryText
 	 * @param int $slop
-	 * @return \Elastica\Query\AbstractQuery
+	 * @return AbstractQuery
 	 */
 	protected function buildHighlightQuery( SearchContext $context, array $fields, $queryText, $slop ) {
 		$query = parent::buildHighlightQuery( $context, $fields, $queryText, $slop );
-		if ( $this->usedExpQuery && $query instanceof \Elastica\Query\QueryString ) {
+		if ( $this->usedExpQuery && $query instanceof QueryString ) {
 			// the exp query accepts more docs (stopwords in query are not required)
 			/** @suppress PhanUndeclaredMethod $query is a QueryString */
 			$query->setDefaultOperator( 'OR' );
@@ -141,11 +153,11 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	 * @param string[] $fields
 	 * @param string $queryText
 	 * @param int $slop
-	 * @return \Elastica\Query\AbstractQuery
+	 * @return AbstractQuery
 	 */
 	protected function buildPhraseRescoreQuery( SearchContext $context, array $fields, $queryText, $slop ) {
 		if ( $this->usedExpQuery ) {
-			$phrase = new \Elastica\Query\MultiMatch();
+			$phrase = new MultiMatch();
 			$phrase->setParam( 'type', 'phrase' );
 			$phrase->setParam( 'slop', $slop );
 			$fields = [];
@@ -154,6 +166,7 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 			}
 			$phrase->setFields( $fields );
 			$phrase->setQuery( $queryText );
+			$this->collectQDRescore( 'phrase_rescore', $phrase );
 			return $phrase;
 		} else {
 			return parent::buildPhraseRescoreQuery( $context, $fields, $queryText, $slop );
@@ -177,29 +190,30 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	/**
 	 * Generate an elasticsearch query by reading profile settings
 	 * @param string $queryString the query text
-	 * @return \Elastica\Query\AbstractQuery
+	 * @return AbstractQuery
 	 */
 	private function buildExpQuery( $queryString ) {
-		$query = new \Elastica\Query\BoolQuery();
+		$query = new BoolQuery();
 
-		$all_filter = new \Elastica\Query\BoolQuery();
+		$all_filter = new BoolQuery();
 		// FIXME: We can't use solely the stem field here
 		// - Depending on langauges it may lack stopwords,
 		// - Diacritics are sometimes (english) strangely (T141216)
 		// A dedicated field used for filtering would be nice
-		$match = new \Elastica\Query\Match();
+		$match = new Match();
 		$match->setField( 'all', [ "query" => $queryString ] );
 		$match->setFieldOperator( 'all', 'AND' );
 		$all_filter->addShould( $match );
-		$match = new \Elastica\Query\Match();
+		$match = new Match();
 		$match->setField( 'all.plain', [ "query" => $queryString ] );
 		$match->setFieldOperator( 'all.plain', 'AND' );
 		$all_filter->addShould( $match );
 		$query->addFilter( $all_filter );
+		$this->collectFilter( $all_filter );
 		$dismaxQueries = [];
 
 		foreach( $this->fields as $f => $settings ) {
-			$mmatch = new \Elastica\Query\MultiMatch();
+			$mmatch = new MultiMatch();
 			$mmatch->setQuery( $queryString );
 			$queryType = $this->defaultQueryType;
 			$minShouldMatch = $this->defaultMinShouldMatch;
@@ -235,11 +249,12 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 			if ( $in_dismax ) {
 				$dismaxQueries[$in_dismax][] = $mmatch;
 			} else {
+				$this->collectQuery( $f, $dismax );
 				$query->addShould( $mmatch );
 			}
 		}
 		foreach ( $dismaxQueries as $name => $queries ) {
-			$dismax = new \Elastica\Query\DisMax();
+			$dismax = new DisMax();
 			if ( isset ( $this->dismaxSettings[$name] ) ) {
 				$settings = $this->dismaxSettings[$name];
 				if ( isset ( $settings['tie_breaker'] ) ) {
@@ -252,10 +267,38 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 			foreach( $queries as $q ) {
 				$dismax->addQuery( $q );
 			}
+			$this->collectQuery( $name, $dismax );
 			$query->addShould( $dismax );
 		}
 		// Removed in future lucene version https://issues.apache.org/jira/browse/LUCENE-7347
 		$query->setParam( 'disable_coord', true );
 		return $query;
+	}
+
+	/** @var $filter AbstractQuery */
+	private function collectFilter( AbstractQuery $filter ) {
+		if ( $this->collector ) {
+			$this->collector->setFilter( $filter );
+		}
+	}
+
+	/**
+	 * @var $feature string
+	 * @var $query AbstractQuery
+	 */
+	private function collectQuery( $feature, AbstractQuery $query ) {
+		if ( $this->collector ) {
+			$this->collectQuery( $feature, $query );
+		}
+	}
+
+	/**
+	 * @var $feature string
+	 * @var $query AbstractQuery
+	 */
+	private function collectQDRescore( $feature, AbstractQuery $query ) {
+		if ( $this->collector ) {
+			$this->collector->addQDRescore( $feature, $query );
+		}
 	}
 }

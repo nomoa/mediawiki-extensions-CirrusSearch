@@ -4,6 +4,7 @@ namespace CirrusSearch\Search;
 
 use CirrusSearch\Query\GeoFeature;
 use CirrusSearch\Util;
+use CirrusSearch\ML\FeatureCollector;
 use Elastica\Query\FunctionScore;
 use Elastica\Query\AbstractQuery;
 use MWNamespace;
@@ -224,10 +225,10 @@ class FunctionScoreChain {
 	 * @param string $chainName the name of the chain (must be a valid
 	 *  chain in wgCirrusSearchRescoreFunctionScoreChains)
 	 */
-	public function __construct( SearchContext $context, $chainName ) {
+	public function __construct( SearchContext $context, $chainName, FeatureCollector $collector ) {
 		$this->chainName = $chainName;
 		$this->context = $context;
-		$this->functionScore = new FunctionScoreDecorator();
+		$this->functionScore = new FunctionScoreDecorator( $collector );
 		$this->chain = $context->getConfig()->getElement( 'CirrusSearchRescoreFunctionScoreChains', $chainName );
 		if ( $this->chain === null ) {
 			throw new InvalidRescoreProfileException( "Unknown rescore function chain $chainName" );
@@ -243,7 +244,7 @@ class FunctionScoreChain {
 	 * @return FunctionScore|null the rescore query or null none of functions were
 	 *  needed.
 	 */
-	public function buildRescoreQuery() {
+	public function buildRescoreQuery( FeatureCollector $collector ) {
 		if ( !isset( $this->chain['functions'] ) ) {
 			throw new InvalidRescoreProfileException( "No functions defined in chain {$this->chainName}." );
 		}
@@ -306,6 +307,13 @@ class FunctionScoreDecorator extends FunctionScore {
 	/** @var int */
 	private $size = 0;
 
+	/** @var FeatureCollector|null */
+	private $featuresCollector;
+
+	public function __construct( FeatureCollector $collector = null ) {
+		$this->featuresCollector = $collector;
+	}
+
 	/**
 	 * @param string $functionType
 	 * @param array|float $functionParams
@@ -315,6 +323,11 @@ class FunctionScoreDecorator extends FunctionScore {
 	 */
 	public function addFunction( $functionType, $functionParams, $filter = null, $weight = null ) {
 		$this->size++;
+
+		if ( $this->featuresCollector ) {
+			$this->featuresCollector->addQIRescore( $this->size, $functionType, $functionParams, $filter, $weight );
+		}
+
 		return parent::addFunction( $functionType, $functionParams, $filter, $weight );
 	}
 
