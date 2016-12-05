@@ -582,6 +582,9 @@ class FTQueryParser {
 }
 
 class Scanner {
+	private const UTF8_1 = chr( 128 );
+	private const UTF8_2 = chr( 224 );
+	private const UTF8_3 = chr( 240 );
 	private $query;
 	private $offset;
 	private $token_start;
@@ -623,25 +626,25 @@ class Scanner {
 	}
 
 	private function advance() {
-		$this->offset += $this->codePointLength( $this->query[$offset] );
+		$this->offset += $this->codePointLength( $this->query, $offset );
 	}
 
 	private function is_eof() {
 		return $this->offset >= strlen( $this->query );
 	}
 
-	private function codePointLength( $str ) {
-		$char = ord( $str );
-		if( $char < 128 ) {
+	private function codePointLength( $data, $offset ) {
+		$chr = $data[$offset];
+		if ( $chr < self::UTF8_1 ) {
 			return 1;
 		}
-		if( $char < 224 ) {
-			return 2;
+		if ( $chr < self::UTF8_2 ) {
+			return min( strlen( $data ) - $offset, 2 );
 		}
-		if( $char < 240 ) {
-			return 3;
+		if ( $chr < self::UTF8_3 ) {
+			return min( strlen( $data ) - $offset, 3 );
 		}
-		return 4;
+		return min( strlen( $data ) - $offset, 4 );
 	}
 
 	private function is_char( $char, $lookahead = false ) {
@@ -649,7 +652,7 @@ class Scanner {
 		if ( $len + $this->offset > strlen( $this->query ) ) {
 			return false;
 		}
-		if ( substr_compare( $this->query, $char, $this->offset, $len ) == 0 ) {
+		if ( substr_compare( $this->query, $char, $this->offset, $len ) === 0 ) {
 			if ( !$lookahead ) {
 				$this->offset += $len;
 			}
@@ -672,9 +675,8 @@ class Scanner {
 
 	/** [a-z] */
 	private function is_ascii_lc_letter() {
-		if ( substr_compare( $this->query, 'a', $this->offset, 1 ) >= 0 &&
-			substr_compare( $this->query, 'z', $this->offset, 1 ) <= 0
-		) {
+		$chr = $this->query[$this->offset];
+		if ( $chr >= 'a' && $chr <= 'z' ) {
 			$this->offset++;
 			return true;
 		}
