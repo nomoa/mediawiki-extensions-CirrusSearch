@@ -105,11 +105,13 @@ class ConfigUtils {
 	 * @return string[] the list of indices
 	 */
 	public function getAllIndicesByType( $typeName ) {
-		$found = [];
-		foreach ( $this->client->getStatus()->getIndexNames() as $name ) {
-			if ( substr( $name, 0, strlen( $typeName ) ) === $typeName ) {
-				$found[] = $name;
-			}
+		$found = null;
+		$response = $this->client->request( $typeName . '*' );
+		if ( $response->isOK() ) {
+			$found = array_keys( $response->getData() );
+		} else {
+			$this->error( "Cannot fetch index names for $typeName: "
+				. $response->getError(), 1 );
 		}
 		return $found;
 	}
@@ -258,5 +260,44 @@ class ConfigUtils {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Checks if this is an index
+	 * @param string $indexName
+	 * @return bool if this is an index false if it's alias or if unknown
+	 */
+	public function isIndex( $indexName ) {
+		if ( !$this->client->getIndex( $indexName )->exists() ) {
+			return false;
+		}
+
+		$response = $this->client->request( $indexName . '/_aliases' );
+		if ( $response->isOK() ) {
+			return isset( $response->getData()[$indexName] );
+		} else {
+			$this->error( "Cannot determine if $indexName is an index: "
+				. $response->getError(), 1 );
+		}
+		return false;
+	}
+
+	/**
+	 * Return a list of index names that points to $aliasName
+	 * @param string $aliasName
+	 * @return string[] index names
+	 */
+	public function getIndicesWithAlias( $aliasName ) {
+		if ( !$this->client->getIndex( $aliasName )->exists() ) {
+			return [];
+		}
+		$response = $this->client->request( $aliasName . '/_aliases' );
+		if ( $response->isOK() ) {
+			return array_keys( $response->getData() );
+		} else {
+			$this->error( "Cannot determine if $indexName is an index: "
+				. $response->getError(), 1 );
+		}
+		return [];
 	}
 }
