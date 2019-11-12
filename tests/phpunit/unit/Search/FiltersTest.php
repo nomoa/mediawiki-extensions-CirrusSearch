@@ -397,4 +397,38 @@ class FiltersTest extends CirrusTestCase {
 			]
 		];
 	}
+
+	/**
+	 * @dataProvider provideTestPrefixQuery
+	 * @covers \CirrusSearch\Search\Filters::prefix
+	 */
+	public function testPrefixQuery( string $query, ?string $field, array $expected ) {
+		$actual = $field !== null ? Filters::prefix( $query, $field ) : Filters::prefix( $query );
+		$this->assertEquals( $expected, $actual->toArray() );
+	}
+
+	public function provideTestPrefixQuery() {
+		return [
+			'simple' => [
+				'foo', null,
+				[
+					'prefix' => [
+						'all.plain' => [
+							'value' => 'foo',
+							'rewrite' => 'top_terms_boost_1024'
+						],
+					]
+				],
+				'foo', 'title.plain',
+				[
+					'prefix' => [
+						'title.plain' => [
+							'value' => 'foo',
+							'rewrite' => 'top_terms_boost_1024'
+						],
+					]
+				],
+			]
+		];
+	}
 }

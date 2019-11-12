@@ -37,4 +37,11 @@ class PrefixNode extends ParsedNode {
 	public function accept( Visitor $visitor ) {
 		$visitor->visitPrefixNode( $this );
 	}
+
+	/**
+	 * @return string
+	 */
+	public function getPrefix(): string {
+		return $this->prefix;
+	}
 }

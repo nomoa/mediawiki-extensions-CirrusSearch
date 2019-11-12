@@ -8,6 +8,7 @@ use Elastica\Query\Fuzzy;
 use Elastica\Query\MatchAll;
 use Elastica\Query\MatchPhrase;
 use Elastica\Query\MatchPhrasePrefix;
+use Elastica\Query\Prefix;
 use Wikimedia\Assert\Assert;
 use function Eris\Generator\string;
 
@@ -309,5 +310,19 @@ class Filters {
 		return ( new Fuzzy( 'all.plain', $query ) )
 			->setFieldOption( 'prefix_length', 2 )
 			->setFieldOption( 'fuzziness', (string)( $fuzziness ?: 'AUTO' ) );
+	}
+
+	/**
+	 * @param string $prefix
+	 * @param string $field
+	 * @return AbstractQuery
+	 */
+	public static function prefix( string $prefix, string $field = 'all.plain' ): AbstractQuery {
+		// TODO: verify if the change in behavior vs query_string wildcard clause is acceptable:
+		// - query_string may normalize (lowercase the term) prior to generating a wildcard term query
+		return new Prefix( [ $field => [
+			'value' => $prefix,
+			'rewrite' => 'top_terms_boost_1024' ]
+		] );
 	}
 }
