@@ -4,9 +4,12 @@ namespace CirrusSearch\Search;
 
 use Elastica\Query\AbstractQuery;
 use Elastica\Query\BoolQuery;
+use Elastica\Query\Fuzzy;
 use Elastica\Query\MatchAll;
 use Elastica\Query\MatchPhrase;
 use Elastica\Query\MatchPhrasePrefix;
+use Wikimedia\Assert\Assert;
+use function Eris\Generator\string;
 
 /**
  * Utilities for dealing with filters.
@@ -289,5 +292,22 @@ class Filters {
 	 */
 	public static function phrasePrefix( string $phrase ): AbstractQuery {
 		return new MatchPhrasePrefix( "all.plain", [ 'query' => $phrase ] );
+	}
+
+	/**
+	 * Build a fuzzy match query
+	 * @param string $query
+	 * @param int|null $fuzziness between 0 and 2 included, null for 'AUTO'
+	 * @return AbstractQuery
+	 */
+	public static function fuzzy( string $query, ?int $fuzziness ): AbstractQuery {
+		Assert::parameter( $fuzziness == null || ( $fuzziness >= 0 && $fuzziness <= 2 ),
+			'$fuzziness', 'must be null, 0, 1 or 2' );
+		// TODO: verify if the change in behavior vs query_string fuzzy clause is acceptable:
+		// - query_string may normalize (lowercase the term) prior to generating a fyzzy term query
+		// - we may have send to all AND all.plain, here we only send to all.plain
+		return ( new Fuzzy( 'all.plain', $query ) )
+			->setFieldOption( 'prefix_length', 2 )
+			->setFieldOption( 'fuzziness', (string)( $fuzziness ?: 'AUTO' ) );
 	}
 }

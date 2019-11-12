@@ -362,4 +362,39 @@ class FiltersTest extends CirrusTestCase {
 			]
 		];
 	}
+
+	/**
+	 * @dataProvider provideTestFuzzyQuery
+	 * @covers \CirrusSearch\Search\Filters::fuzzy
+	 */
+	public function testFuzzyQuery( string $query, ?int $fuzziness, array $expected ) {
+		$this->assertEquals( $expected, Filters::fuzzy( $query, $fuzziness )->toArray() );
+	}
+
+	public function provideTestFuzzyQuery() {
+		return [
+			'simple' => [
+				'foo', null,
+				[
+					'fuzzy' => [
+						'all.plain' => [
+							'fuzziness' => 'AUTO',
+							'prefix_length' => 2,
+							'value' => 'foo'
+						],
+					]
+				],
+				'foo', 2,
+				[
+					'fuzzy' => [
+						'all.plain' => [
+							'fuzziness' => '2',
+							'prefix_length' => 2,
+							'value' => 'foo'
+						]
+					],
+				]
+			]
+		];
+	}
 }
