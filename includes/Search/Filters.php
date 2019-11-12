@@ -182,4 +182,89 @@ class Filters {
 
 		return $query;
 	}
+
+	/**
+	 * Builds a simple filter on all and all.plain when all terms must match
+	 *
+	 * @param array[] $options array containing filter options
+	 * @param string $query
+	 * @return AbstractQuery
+	 */
+	public static function bagOfWordsFilterOverAllField( array $options, string $query ): AbstractQuery {
+		$filter = new \Elastica\Query\BoolQuery();
+		// FIXME: We can't use solely the stem field here
+		// - Depending on languages it may lack stopwords,
+		// A dedicated field used for filtering would be nice
+		foreach ( [ 'all', 'all.plain' ] as $field ) {
+			$m = new \Elastica\Query\Match();
+			$m->setFieldQuery( $field, $query );
+			$minShouldMatch = '100%';
+			if ( isset( $options['settings'][$field]['minimum_should_match'] ) ) {
+				$minShouldMatch = $options['settings'][$field]['minimum_should_match'];
+			}
+			if ( $minShouldMatch === '100%' ) {
+				$m->setFieldOperator( $field, 'AND' );
+			} else {
+				$m->setFieldMinimumShouldMatch( $field, $minShouldMatch );
+			}
+			$filter->addShould( $m );
+		}
+		return $filter;
+	}
+
+	/**
+	 * Builds a simple filter based on buildSimpleAllFilter + a constraint
+	 * on title/redirect :
+	 * (all:query OR all.plain:query) AND (title:query OR redirect:query)
+	 * where the filter on title/redirect can be controlled by setting
+	 * minimum_should_match to relax the constraint on title.
+	 * (defaults to '3<80%')
+	 *
+	 * @param array[] $options array containing filter options
+	 * @param string $query the user query
+	 * @return AbstractQuery
+	 */
+	public static function titleConstrainedBagOfWordsFilterOverAllField( array $options, string $query ): AbstractQuery {
+		$filter = new \Elastica\Query\BoolQuery();
+		$filter->addMust( self::bagOfWordsFilterOverAllField( $options, $query ) );
+		$minShouldMatch = '3<80%';
+		if ( isset( $options['settings']['minimum_should_match'] ) ) {
+			$minShouldMatch = $options['settings']['minimum_should_match'];
+		}
+		$titleFilter = new \Elastica\Query\BoolQuery();
+
+		foreach ( [ 'title', 'redirect.title' ] as $field ) {
+			$m = new \Elastica\Query\Match();
+			$m->setFieldQuery( $field, $query );
+			$m->setFieldMinimumShouldMatch( $field, $minShouldMatch );
+			$titleFilter->addShould( $m );
+		}
+		$filter->addMust( $titleFilter );
+		return $filter;
+	}
+
+	/**
+	 * @param array $filterDef
+	 * @param string $query
+	 * @return AbstractQuery
+	 */
+	public static function bagOfWordsFilter( array $filterDef, string $query ): AbstractQuery {
+		if ( !isset( $filterDef['type'] ) ) {
+			throw new \InvalidArgumentException( "Cannot configure the filter clause, 'type' must be defined." );
+		}
+		$type = $filterDef['type'];
+
+		switch ( $type ) {
+			case 'default':
+				$filter = self::bagOfWordsFilterOverAllField( $filterDef, $query );
+				break;
+			case 'constrain_title':
+				$filter = self::titleConstrainedBagOfWordsFilterOverAllField( $filterDef, $query );
+				break;
+			default:
+				throw new \InvalidArgumentException( "Cannot build the filter clause: unknown filter type $type" );
+		}
+
+		return $filter;
+	}
 }

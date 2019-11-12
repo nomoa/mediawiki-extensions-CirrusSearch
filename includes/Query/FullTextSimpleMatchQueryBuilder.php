@@ -2,6 +2,7 @@
 
 namespace CirrusSearch\Query;
 
+use CirrusSearch\Search\Filters;
 use CirrusSearch\Search\SearchContext;
 use CirrusSearch\SearchConfig;
 
@@ -239,84 +240,7 @@ class FullTextSimpleMatchQueryBuilder extends FullTextQueryStringQueryBuilder {
 	 * @param string $query query text
 	 * @param \Elastica\Query\BoolQuery $boolQuery the query to attach the filter to
 	 */
-	private function attachFilter( array $filterDef, $query, \Elastica\Query\BoolQuery $boolQuery ) {
-		if ( !isset( $filterDef['type'] ) ) {
-			throw new \RuntimeException( "Cannot configure the filter clause, 'type' must be defined." );
-		}
-		$type = $filterDef['type'];
-		$filter = null;
-
-		switch ( $type ) {
-		case 'default':
-			$filter = $this->buildSimpleAllFilter( $filterDef, $query );
-			break;
-		case 'constrain_title':
-			$filter = $this->buildTitleFilter( $filterDef, $query );
-			break;
-		default:
-			throw new \RuntimeException( "Cannot build the filter clause: unknown filter type $type" );
-		}
-
-		$boolQuery->addFilter( $filter );
-	}
-
-	/**
-	 * Builds a simple filter on all and all.plain when all terms must match
-	 *
-	 * @param array[] $options array containing filter options
-	 * @param string $query
-	 * @return \Elastica\Query\AbstractQuery
-	 */
-	private function buildSimpleAllFilter( $options, $query ) {
-		$filter = new \Elastica\Query\BoolQuery();
-		// FIXME: We can't use solely the stem field here
-		// - Depending on languages it may lack stopwords,
-		// A dedicated field used for filtering would be nice
-		foreach ( [ 'all', 'all.plain' ] as $field ) {
-			$m = new \Elastica\Query\Match();
-			$m->setFieldQuery( $field, $query );
-			$minShouldMatch = '100%';
-			if ( isset( $options['settings'][$field]['minimum_should_match'] ) ) {
-				$minShouldMatch = $options['settings'][$field]['minimum_should_match'];
-			}
-			if ( $minShouldMatch === '100%' ) {
-				$m->setFieldOperator( $field, 'AND' );
-			} else {
-				$m->setFieldMinimumShouldMatch( $field, $minShouldMatch );
-			}
-			$filter->addShould( $m );
-		}
-		return $filter;
-	}
-
-	/**
-	 * Builds a simple filter based on buildSimpleAllFilter + a constraint
-	 * on title/redirect :
-	 * (all:query OR all.plain:query) AND (title:query OR redirect:query)
-	 * where the filter on title/redirect can be controlled by setting
-	 * minimum_should_match to relax the constraint on title.
-	 * (defaults to '3<80%')
-	 *
-	 * @param array[] $options array containing filter options
-	 * @param string $query the user query
-	 * @return \Elastica\Query\AbstractQuery
-	 */
-	private function buildTitleFilter( $options, $query ) {
-		$filter = new \Elastica\Query\BoolQuery();
-		$filter->addMust( $this->buildSimpleAllFilter( $options, $query ) );
-		$minShouldMatch = '3<80%';
-		if ( isset( $options['settings']['minimum_should_match'] ) ) {
-			$minShouldMatch = $options['settings']['minimum_should_match'];
-		}
-		$titleFilter = new \Elastica\Query\BoolQuery();
-
-		foreach ( [ 'title', 'redirect.title' ] as $field ) {
-			$m = new \Elastica\Query\Match();
-			$m->setFieldQuery( $field, $query );
-			$m->setFieldMinimumShouldMatch( $field, $minShouldMatch );
-			$titleFilter->addShould( $m );
-		}
-		$filter->addMust( $titleFilter );
-		return $filter;
+	private function attachFilter( array $filterDef, string $query, \Elastica\Query\BoolQuery $boolQuery ): void {
+		$boolQuery->addFilter( Filters::bagOfWordsFilter( $filterDef, $query ) );
 	}
 }

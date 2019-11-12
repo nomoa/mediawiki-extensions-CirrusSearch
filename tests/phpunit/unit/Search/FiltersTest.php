@@ -7,6 +7,7 @@ use Elastica\Query\AbstractQuery;
 use Elastica\Query\BoolQuery;
 use Elastica\Query\Script;
 use Elastica\Query\Term;
+use InvalidArgumentException;
 
 /**
  * Test for filter utilities.
@@ -132,5 +133,172 @@ class FiltersTest extends CirrusTestCase {
 			$and->addFilter( $query );
 		}
 		return $and;
+	}
+
+	/**
+	 * @covers \CirrusSearch\Search\Filters::bagOfWordsFilter
+	 * @covers \CirrusSearch\Search\Filters::bagOfWordsFilterOverAllField
+	 * @covers \CirrusSearch\Search\Filters::titleConstrainedBagOfWordsFilterOverAllField
+	 * @dataProvider provideTesBagOfWordsFilter
+	 */
+	public function testBagOfWordsFilter( array $profile, string $query, array $expectedQuery ) {
+		$this->assertEquals( $expectedQuery, Filters::bagOfWordsFilter( $profile, $query )->toArray() );
+	}
+
+	public function provideTesBagOfWordsFilter(): array {
+		return [
+			'simple all filter' => [
+				[ 'type' => 'default' ],
+				'foo bar',
+				[
+					'bool' => [
+						'should' => [
+							[ 'match' => [
+								'all' => [
+									'query' => 'foo bar',
+									'operator' => 'AND'
+								]
+							] ],
+							[ 'match' => [
+								'all.plain' => [
+									'query' => 'foo bar',
+									'operator' => 'AND'
+								]
+							] ],
+						]
+					]
+				]
+			],
+			'simple all filter with min_should_match' => [
+				[
+					'type' => 'default',
+					'settings' => [ 'all.plain' => [ 'minimum_should_match' => '80%' ], 'all' => [ 'minimum_should_match' => '90%' ] ]
+				],
+				'foo bar',
+				[
+					'bool' => [
+						'should' => [
+							[ 'match' => [
+								'all' => [
+									'query' => 'foo bar',
+									'minimum_should_match' => '90%',
+								]
+							] ],
+							[ 'match' => [
+								'all.plain' => [
+									'query' => 'foo bar',
+									'minimum_should_match' => '80%',
+								]
+							] ],
+						]
+					]
+				]
+			],
+			'simple title constrained all filter' => [
+				[ 'type' => 'constrain_title' ],
+				'foo bar',
+				[
+					'bool' => [
+						'must' => [
+							[ 'bool' => [
+								'should' => [
+									[ 'match' => [
+										'all' => [
+											'query' => 'foo bar',
+											'operator' => 'AND'
+										]
+									] ],
+									[ 'match' => [
+										'all.plain' => [
+											'query' => 'foo bar',
+											'operator' => 'AND'
+										]
+									] ],
+								]
+							] ],
+							[ 'bool' => [
+								'should' => [
+									[ 'match' => [
+										'title' => [
+											'query' => 'foo bar',
+											'minimum_should_match' => '3<80%'
+										]
+									] ],
+									[ 'match' => [
+											'redirect.title' => [
+												'query' => 'foo bar',
+												'minimum_should_match' => '3<80%'
+											]
+									] ]
+								]
+							] ]
+						]
+					]
+				]
+			],
+			'simple title constrained all filter (tuned)' => [
+				[
+					'type' => 'constrain_title',
+					'settings' => [
+						'minimum_should_match' => '70%',
+						'all.plain' => [ 'minimum_should_match' => '80%' ],
+						'all' => [ 'minimum_should_match' => '90%' ]
+					]
+				],
+				'foo bar',
+				[
+					'bool' => [
+						'must' => [
+							[ 'bool' => [
+								'should' => [
+									[ 'match' => [
+										'all' => [
+											'query' => 'foo bar',
+											'minimum_should_match' => '90%'
+										]
+									] ],
+									[ 'match' => [
+										'all.plain' => [
+											'query' => 'foo bar',
+											'minimum_should_match' => '80%'
+										]
+									] ],
+								]
+							] ],
+							[ 'bool' => [
+								'should' => [
+									[ 'match' => [
+										'title' => [
+											'query' => 'foo bar',
+											'minimum_should_match' => '70%'
+										]
+									] ],
+									[ 'match' => [
+										'redirect.title' => [
+											'query' => 'foo bar',
+											'minimum_should_match' => '70%'
+										]
+									] ]
+								]
+							] ]
+						]
+					]
+				]
+			]
+		];
+	}
+
+	public function testBagOfWordsFilterInvalidProfile() {
+		try {
+			Filters::bagOfWordsFilter( [], 'foo' );
+			$this->fail( "Expecting InvalidArgumentException when 'type' is omitted" );
+		} catch ( InvalidArgumentException $e ) {
+		}
+
+		try {
+			Filters::bagOfWordsFilter( [ 'type' => 'unknown' ], 'foo' );
+			$this->fail( "Expecting InvalidArgumentException when 'type' is unknown" );
+		} catch ( InvalidArgumentException $e ) {
+		}
 	}
 }
