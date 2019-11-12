@@ -336,4 +336,30 @@ class FiltersTest extends CirrusTestCase {
 			],
 		];
 	}
+
+	/**
+	 * @dataProvider provideTestPhrasePrefix
+	 * @covers \CirrusSearch\Search\Filters::phrasePrefix
+	 */
+	public function testPhrasePrefix( string $query, array $expected ) {
+		$this->assertEquals( $expected, Filters::phrasePrefix( $query )->toArray() );
+	}
+
+	/**
+	 * @return array
+	 */
+	public function provideTestPhrasePrefix() {
+		return [
+			'simple' => [
+				'foo bar',
+				[
+					'match_phrase_prefix' => [
+						'all.plain' => [
+							'query' => 'foo bar',
+						]
+					]
+				]
+			]
+		];
+	}
 }

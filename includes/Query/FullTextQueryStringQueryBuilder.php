@@ -2,6 +2,7 @@
 
 namespace CirrusSearch\Query;
 
+use CirrusSearch\Search\Filters;
 use CirrusSearch\SearchConfig;
 use CirrusSearch\Search\SearchContext;
 use CirrusSearch\Extra\Query\TokenCountRouter;
@@ -85,9 +86,7 @@ class FullTextQueryStringQueryBuilder implements FullTextQueryBuilder {
 				if ( !$negate && !isset( $matches[ 'fuzzy' ] ) && !isset( $matches[ 'slop' ] ) &&
 					preg_match( '/^"([^"*]+)[*]"/', $main, $matches )
 				) {
-					$phraseMatch = new \Elastica\Query\MatchPhrasePrefix();
-					$phraseMatch->setFieldQuery( "all.plain", $matches[1] );
-					$searchContext->addNonTextQuery( $phraseMatch );
+					$searchContext->addNonTextQuery( Filters::phrasePrefix( $matches[1] ) );
 					$searchContext->addSyntaxUsed( 'phrase_match_prefix' );
 
 					$phraseHighlightMatch = new \Elastica\Query\QueryString();
