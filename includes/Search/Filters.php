@@ -4,7 +4,9 @@ namespace CirrusSearch\Search;
 
 use Elastica\Query\AbstractQuery;
 use Elastica\Query\BoolQuery;
+use Elastica\Query\Match;
 use Elastica\Query\MatchAll;
+use Elastica\Query\MatchPhrase;
 
 /**
  * Utilities for dealing with filters.
@@ -266,5 +268,17 @@ class Filters {
 		}
 
 		return $filter;
+	}
+
+	/**
+	 * Builds a phrase query on top of the all field
+	 * @param string $phrase
+	 * @param bool $useStem
+	 * @param int $slop
+	 * @return AbstractQuery
+	 */
+	public static function phrase( string $phrase, bool $useStem, int $slop ): AbstractQuery {
+		$field = $useStem ? 'all' : 'all.plain';
+		return new MatchPhrase( $field, [ 'query' => $phrase, 'slop' => $slop ] );
 	}
 }

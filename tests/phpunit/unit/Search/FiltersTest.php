@@ -301,4 +301,39 @@ class FiltersTest extends CirrusTestCase {
 		} catch ( InvalidArgumentException $e ) {
 		}
 	}
+
+	/**
+	 * @dataProvider provideTestPhrase
+	 * @covers \CirrusSearch\Search\Filters::phrase
+	 */
+	public function testPhrase( $query, $useStem, $slop, array $expected ) {
+		$this->assertEquals( $expected, Filters::phrase( $query, $useStem, $slop )->toArray() );
+	}
+
+	public function provideTestPhrase() {
+		return [
+			'simple' => [
+				'foo bar', false, 1,
+				[
+					'match_phrase' => [
+						'all.plain' => [
+							'query' => 'foo bar',
+							'slop' => 1
+						]
+					]
+				]
+			],
+			'stemmed (' => [
+				'foo bar', true, 2,
+				[
+					'match_phrase' => [
+						'all' => [
+							'query' => 'foo bar',
+							'slop' => 2
+						]
+					]
+				]
+			],
+		];
+	}
 }
