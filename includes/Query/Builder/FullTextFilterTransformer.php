@@ -15,27 +15,56 @@ use CirrusSearch\Parser\AST\PrefixNode;
 use CirrusSearch\Parser\AST\Visitor\Visitor;
 use CirrusSearch\Parser\AST\WildcardNode;
 use CirrusSearch\Parser\AST\WordsQueryNode;
+use CirrusSearch\Search\Filters;
 use CirrusSearch\Search\SearchQuery;
 use Elastica\Query\AbstractQuery;
 use Elastica\Query\BoolQuery;
 use Elastica\QueryBuilder;
+use InvalidArgumentException;
 
 class FullTextFilterTransformer implements SearchQueryESTransformer, Visitor {
+	/**
+	 * @var array
+	 */
+	private $bagOfWordFilterProfile;
+
+	/**
+	 * @var int
+	 */
+	private $defaultPhraseQuerySlop;
+
+	/**
+	 * @var int
+	 */
+
+	private $maxPhraseSlop;
+
 	/**
 	 * @var QueryBuilder\DSL\Query
 	 */
 	private $queryBuilder;
+
 	/**
 	 * @var string
 	 */
 	private $longestNonNegativeBagOfWord;
 
+	/**
+	 * @var string
+	 */
 	private $currentBoolOccur;
 
 	/**
 	 * @var BoolQuery
 	 */
 	private $current;
+
+	public function __construct( array $bagOfWordsFilterProfile, int $defaultPhraseQuerySlop, int $maxPhraseSlop ) {
+		$this->bagOfWordFilterProfile = $bagOfWordsFilterProfile;
+		$this->defaultPhraseQuerySlop = $defaultPhraseQuerySlop;
+		$this->maxPhraseSlop = $maxPhraseSlop;
+		$this->queryBuilder = QueryBuilder::query();
+	}
 
 	public function transform( SearchQuery $query, QueryBuildingContext $buildingContext ): AbstractQuery {
 		$this->current = $this->queryBuilder->bool();
@@ -47,10 +76,14 @@ class FullTextFilterTransformer implements SearchQueryESTransformer, Visitor {
 		switch ( $this->currentBoolOccur ) {
 			case BooleanClause::MUST:
 				$this->current->addMust( $query );
+				break;
 			case BooleanClause::SHOULD:
 				$this->current->addShould( $query );
+				break;
 			case BooleanClause::MUST_NOT:
 				$this->current->addMustNot( $query );
+				break;
+			default: throw new InvalidArgumentException( "Unsupported boolean occur: {$this->currentBoolOccur}" );
 		}
 	}
 
@@ -80,48 +113,50 @@ class FullTextFilterTransformer implements SearchQueryESTransformer, Visitor {
 	 * @param WordsQueryNode $node
 	 */
 	public function visitWordsQueryNode( WordsQueryNode $node ) {
+		$this->append( Filters::bagOfWordsFilter( $this->bagOfWordFilterProfile, $node->getWords() ) );
 	}
 
 	/**
 	 * @param PhraseQueryNode $node
 	 */
 	public function visitPhraseQueryNode( PhraseQueryNode $node ) {
-		// TODO: Implement visitPhraseQueryNode() method.
+		$slop = $node->getSlop() < 0 ? $this->defaultPhraseQuerySlop : $node->getSlop();
+		$this->append( Filters::phrase( $node->getPhrase(), $node->isStem(), $node->getSlop() ) );
 	}
 
 	/**
 	 * @param PhrasePrefixNode $node
 	 */
 	public function visitPhrasePrefixNode( PhrasePrefixNode $node ) {
-		// TODO: Implement visitPhrasePrefixNode() method.
+		$this->append( Filters::phrasePrefix( $node->getPhrase() ) );
 	}
 
 	/**
 	 * @param NegatedNode $node
 	 */
 	public function visitNegatedNode( NegatedNode $node ) {
-		// TODO: Implement visitNegatedNode() method.
+		throw new InvalidArgumentException( "Negated node should have been rewritten as MUST_NOT boolean clauses" );
 	}
 
 	/**
 	 * @param FuzzyNode $node
 	 */
 	public function visitFuzzyNode( FuzzyNode $node ) {
-		// TODO: Implement visitFuzzyNode() method.
+		$fuzziness = $node->getFuzziness() < 0 ? null : $node->getFuzziness();
+		$this->append( Filters::fuzzy( $node->getWord(), $fuzziness ) );
 	}
 
 	/**
 	 * @param PrefixNode $node
 	 */
 	public function visitPrefixNode( PrefixNode $node ) {
-		// TODO: Implement visitPrefixNode() method.
+		$this->append( Filters::prefix( $node->getPrefix() ) );
 	}
 
 	/**
 	 * @param WildcardNode $node
 	 */
 	public function visitWildcardNode( WildcardNode $node ) {
-		// TODO: Implement visitWildcardNode() method.
 	}
 
 	/**
