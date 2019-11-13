@@ -431,4 +431,38 @@ class FiltersTest extends CirrusTestCase {
 			]
 		];
 	}
+
+	/**
+	 * @dataProvider provideTestWildcardQuery
+	 * @covers \CirrusSearch\Search\Filters::wildcard
+	 */
+	public function testWildcardQuery( string $query, ?string $field, array $expected ) {
+		$actual = $field !== null ? Filters::wildcard( $query, $field ) : Filters::wildcard( $query );
+		$this->assertEquals( $expected, $actual->toArray() );
+	}
+
+	public function provideTestWildcardQuery() {
+		return [
+			'simple' => [
+				'foo', null,
+				[
+					'wildcard' => [
+						'all.plain' => [
+							'value' => 'foo',
+							'rewrite' => 'top_terms_boost_1024',
+						],
+					]
+				],
+				'foo', 'title.plain',
+				[
+					'wildcard' => [
+						'title.plain' => [
+							'value' => 'foo',
+							'rewrite' => 'top_terms_boost_1024'
+						],
+					]
+				],
+			]
+		];
+	}
 }

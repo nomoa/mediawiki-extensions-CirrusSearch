@@ -9,6 +9,7 @@ use Elastica\Query\MatchAll;
 use Elastica\Query\MatchPhrase;
 use Elastica\Query\MatchPhrasePrefix;
 use Elastica\Query\Prefix;
+use Elastica\Query\Wildcard;
 use Wikimedia\Assert\Assert;
 use function Eris\Generator\string;
 
@@ -31,6 +32,13 @@ use function Eris\Generator\string;
  * http://www.gnu.org/copyleft/gpl.html
  */
 class Filters {
+	/**
+	 * Used by multiterm queries (prefix, wildcard and fuzzy)
+	 * see https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-multi-term-rewrite.html
+	 * (beware to only choose options that do not explode on the max boolean clauses exception)
+	 */
+	const MULTITERM_QUERY_REWRITE = 'top_terms_boost_1024';
+
 	/**
 	 * Turns a list of queries into a boolean OR, requiring only one
 	 * of the provided queries to match.
@@ -184,7 +192,7 @@ class Filters {
 		$query->setDefaultOperator( 'AND' );
 		$query->setAllowLeadingWildcard( $escaper->getAllowLeadingWildcard() );
 		$query->setFuzzyPrefixLength( 2 );
-		$query->setRewrite( 'top_terms_boost_1024' );
+		$query->setRewrite( self::MULTITERM_QUERY_REWRITE );
 
 		return $query;
 	}
@@ -322,7 +330,17 @@ class Filters {
 		// - query_string may normalize (lowercase the term) prior to generating a wildcard term query
 		return new Prefix( [ $field => [
 			'value' => $prefix,
-			'rewrite' => 'top_terms_boost_1024' ]
-		] );
+			'rewrite' => self::MULTITERM_QUERY_REWRITE
+		] ] );
+	}
+
+	/**
+	 * @param string $wildcard
+	 * @param string $field
+	 * @return AbstractQuery
+	 */
+	public static function wildcard( string $wildcard, string $field = 'all.plain' ): AbstractQuery {
+		return ( new Wildcard() )
+			->setParams( [ $field => [ 'value' => $wildcard, 'rewrite' => self::MULTITERM_QUERY_REWRITE ] ] );
 	}
 }
